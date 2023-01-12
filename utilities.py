@@ -17,7 +17,7 @@ def get_score(y_true, y_pred):
     precision_list = [0]
     recall_list = [1]
     for threshold in np.arange(0.01, 1, 0.01):
-        pred_int = tf.cast(y_pred >= threshold, tf.int16)
+        pred_int = tf.cast(y_pred >= threshold, tf.float32)
         tp = pred_int * y_true
         fp = pred_int * (1-y_true)
         fn = (1-pred_int) * y_true
@@ -112,7 +112,7 @@ def get_loss_fn_sigmoid():
             y_true      binary, shape = [N,M]
             y_pred      logits, shape = [N,M]
         '''
-        loss = tf.nn.softmax_cross_entropy_with_logits(y_true, y_pred)
+        loss = tf.nn.sigmoid_cross_entropy_with_logits(y_true, y_pred)
         return tf.reduce_mean(loss)
     return loss_fn_sigmoid
 
@@ -136,4 +136,45 @@ def generate_rectangular_data(x, y, w, h, size=100):
     b = b - h/2.0 + y
     
     return np.concatenate([a[:,np.newaxis], b[:,np.newaxis]], axis=1)
-    
+
+def get_loss_fn_lstm(structure, alpha, beta):
+    ''' 
+    structure     array of shape [M,M], where M is the number of all classes 
+                  (a hierarchical level may contain multiple classes), 
+                  structure[i,j] == 1 iff "class i" is a subclass of "class j"
+    alpha         a hyper-parameter to balance hierarchical loss and prediction loss
+    beta          a hyper-parameter to balance local prob and global prob
+    '''
+    def loss_fn_lstm(y_true, y_pred_logits):
+        ''' 
+        y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
+        y_pred     [total_prob, local_prob, global_prob], local_prob = [N,K], global_prob = [N,K]
+        '''
+        local_logits, global_logits = y_pred_logits 
+        
+        local_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(y_true, local_logits)
+        )
+        
+        global_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(y_true, global_logits)
+        )
+        
+        total_prob = beta * tf.math.sigmoid(local_logits) + (1-beta) * tf.math.sigmoid(global_logits)
+        
+        hierachical_loss = 0
+        for i in range(structure.shape[0]):
+            for j in range(structure.shape[1]):
+                if structure[i,j] == 1:
+                    hierachical_loss += tf.reduce_sum(
+                        tf.where(
+                            total_prob[:,i] < total_prob[:,j], 
+                            0, 
+                            tf.pow(total_prob[:,i] - total_prob[:,j],2)
+                        )
+                    )
+        hierachical_loss /= y_true.shape[0]
+        
+        return local_loss + global_loss + alpha * hierachical_loss
+        
+    return loss_fn_lstm
