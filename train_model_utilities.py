@@ -65,3 +65,9 @@ def model_score(model, x, y, model_name):
     score = get_score(y, prob)
     return score 
 
+def print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid, x_test, y_test):
+    train_score = model_score(model, x_train, y_train, model_name)
+    valid_score = model_score(model, x_valid, y_valid, model_name)
+    test_score = model_score(model, x_test, y_test, model_name)
+    print("AU(PRC) \ntrain: {}, validation {}, test {}".format(train_score, valid_score, test_score))
+    

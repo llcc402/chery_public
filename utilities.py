@@ -178,3 +178,22 @@ def get_loss_fn_lstm(structure, alpha, beta):
         return local_loss + global_loss + alpha * hierachical_loss
         
     return loss_fn_lstm
+
+def split_train_valid_test(data, y):
+    N = data.shape[0]
+    idx = np.random.permutation(N)
+    train_num = int(N * 6 / 10)
+    valid_num = int(N * 2 / 10)
+
+    train_idx = idx[:train_num]
+    valid_idx = idx[train_num:(train_num + valid_num)]
+    test_idx = idx[(train_num + valid_num):]
+
+    x_train, x_valid, x_test = data[train_idx], data[valid_idx], data[test_idx]
+    y_train, y_valid, y_test = y[train_idx], y[valid_idx], y[test_idx]
+
+    y_train = tf.convert_to_tensor(y_train, tf.float32)
+    y_valid = tf.convert_to_tensor(y_valid, tf.float32)
+    y_test = tf.convert_to_tensor(y_test, tf.float32)
+    return (x_train, y_train), (x_valid, y_valid), (x_test, y_test)
+
