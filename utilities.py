@@ -197,3 +197,47 @@ def split_train_valid_test(data, y):
     y_test = tf.convert_to_tensor(y_test, tf.float32)
     return (x_train, y_train), (x_valid, y_valid), (x_test, y_test)
 
+def log_neg_prob(x):
+    '''
+    return log (1-p(x)), where p(x) = sigmoid(x)
+    '''
+    return -x - softplus(x)
+
+def get_loss_fn_log(structure, alpha):
+    def loss_fn_log(y_true, y_pred_logits):
+        ''' 
+        y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
+        y_pred     [total_prob, local_prob, global_prob], local_prob = [N,K], global_prob = [N,K]
+        '''
+        local_logits, global_logits = y_pred_logits 
+        local_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(y_true, local_logits)
+        )
+        
+        global_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(y_true, global_logits)
+        )
+        
+        hierachical_loss = 0
+        for i in range(structure.shape[0]):
+            for j in range(structure.shape[1]):
+                if structure[i,j] == 1:
+                    hierachical_loss += tf.reduce_sum(
+                        tf.where(
+                            local_logits[:,i] < local_logits[:,j], 
+                            0, 
+                            log_neg_prob(local_logits[:,j]) - log_neg_prob(local_logits[:,i])
+                        )
+                    )
+                    hierachical_loss += tf.reduce_sum(
+                        tf.where(
+                            global_logits[:,i] < global_logits[:,j], 
+                            0, 
+                            log_neg_prob(global_logits[:,j]) - log_neg_prob(global_logits[:,i])
+                        )
+                    )
+        hierachical_loss /= y_true.shape[0]
+        
+        return local_loss + global_loss + alpha * hierachical_loss
+        
+    return loss_fn_log
