@@ -70,4 +70,23 @@ def print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid
     valid_score = model_score(model, x_valid, y_valid, model_name)
     test_score = model_score(model, x_test, y_test, model_name)
     print("AU(PRC) \ntrain: {}, validation {}, test {}".format(train_score, valid_score, test_score))
-    
+
+def train_epoch(model, optimizer, loss_fn, model_name, epochs, train_data, x_train, y_train, x_valid, y_valid, x_test, y_test):
+    train_step_fn = get_train_step_fn(model, optimizer, loss_fn, model_name)
+    train_loss_list = list()
+    valid_loss_list = list()
+    for epoch in range(epochs):
+        for x_train_batch, y_train_batch in train_data:
+            loss, valid_loss = train_step_fn(
+                x_train_batch, 
+                y_train_batch, 
+                (x_valid, y_valid)
+            )
+    if (epoch + 1) % (epochs // 10) == 0:
+        train_loss_list.append(loss)
+        valid_loss_list.append(valid_loss)
+    plt.plot(train_loss_list, 'o', label='train')
+    plt.plot(valid_loss_list, 'o', label='valid')
+    plt.legend()
+        
+    print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid, x_test, y_test)
