@@ -137,6 +137,48 @@ def generate_rectangular_data(x, y, w, h, size=100):
     
     return np.concatenate([a[:,np.newaxis], b[:,np.newaxis]], axis=1)
 
+# def get_loss_fn_lstm(structure, alpha, beta):
+#     ''' 
+#     structure     array of shape [M,M], where M is the number of all classes 
+#                   (a hierarchical level may contain multiple classes), 
+#                   structure[i,j] == 1 iff "class i" is a subclass of "class j"
+#     alpha         a hyper-parameter to balance hierarchical loss and prediction loss
+#     beta          a hyper-parameter to balance local prob and global prob
+#     '''
+#     def loss_fn_lstm(y_true, y_pred_logits):
+#         ''' 
+#         y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
+#         y_pred     [total_prob, local_prob, global_prob], local_prob = [N,K], global_prob = [N,K]
+#         '''
+#         local_logits, global_logits = y_pred_logits 
+        
+#         local_loss = tf.reduce_mean(
+#             tf.nn.sigmoid_cross_entropy_with_logits(y_true, local_logits)
+#         )
+        
+#         global_loss = tf.reduce_mean(
+#             tf.nn.sigmoid_cross_entropy_with_logits(y_true, global_logits)
+#         )
+        
+#         total_prob = beta * tf.math.sigmoid(local_logits) + (1-beta) * tf.math.sigmoid(global_logits)
+        
+#         hierachical_loss = 0
+#         for i in range(structure.shape[0]):
+#             for j in range(structure.shape[1]):
+#                 if structure[i,j] == 1:
+#                     hierachical_loss += tf.reduce_sum(
+#                         tf.where(
+#                             total_prob[:,i] < total_prob[:,j], 
+#                             0, 
+#                             tf.pow(total_prob[:,i] - total_prob[:,j],2)
+#                         )
+#                     )
+#         hierachical_loss /= y_true.shape[0]
+        
+#         return local_loss + global_loss + alpha * hierachical_loss
+        
+#     return loss_fn_lstm
+
 def get_loss_fn_lstm(structure, alpha, beta):
     ''' 
     structure     array of shape [M,M], where M is the number of all classes 
@@ -163,16 +205,15 @@ def get_loss_fn_lstm(structure, alpha, beta):
         total_prob = beta * tf.math.sigmoid(local_logits) + (1-beta) * tf.math.sigmoid(global_logits)
         
         hierachical_loss = 0
-        for i in range(structure.shape[0]):
-            for j in range(structure.shape[1]):
-                if structure[i,j] == 1:
-                    hierachical_loss += tf.reduce_sum(
-                        tf.where(
-                            total_prob[:,i] < total_prob[:,j], 
-                            0, 
-                            tf.pow(total_prob[:,i] - total_prob[:,j],2)
-                        )
-                    )
+        total_prob_1 = total_prob[:,:,tf.newaxis]
+        total_prob_2 = total_prob[:,tf.newaxis,:]
+        structure_expand = structure[tf.newaxis,:,:]
+        hierachical_loss += tf.reduce_sum(
+            structure_expand * tf.cast(
+                (-total_prob_1 + total_prob_2) < 0,
+                tf.float32) * tf.pow(total_prob_1 - total_prob_2, 2)
+        )
+        
         hierachical_loss /= y_true.shape[0]
         
         return local_loss + global_loss + alpha * hierachical_loss
@@ -203,46 +244,46 @@ def log_neg_prob(x):
     '''
     return -x - softplus(x)
 
-def get_loss_fn_log(structure, alpha):
-    def loss_fn_log(y_true, y_pred_logits):
-        ''' 
-        y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
-        y_pred     [total_prob, local_prob, global_prob], local_prob = [N,K], global_prob = [N,K]
-        '''
-        local_logits, global_logits = y_pred_logits 
-        local_loss = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(y_true, local_logits)
-        )
+# def get_loss_fn_log(structure, alpha):
+#     def loss_fn_log(y_true, y_pred_logits):
+#         ''' 
+#         y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
+#         y_pred     [total_prob, local_prob, global_prob], local_prob = [N,K], global_prob = [N,K]
+#         '''
+#         local_logits, global_logits = y_pred_logits 
+#         local_loss = tf.reduce_mean(
+#             tf.nn.sigmoid_cross_entropy_with_logits(y_true, local_logits)
+#         )
         
-        global_loss = tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(y_true, global_logits)
-        )
+#         global_loss = tf.reduce_mean(
+#             tf.nn.sigmoid_cross_entropy_with_logits(y_true, global_logits)
+#         )
         
-        hierachical_loss = 0
-        for i in range(structure.shape[0]):
-            for j in range(structure.shape[1]):
-                if structure[i,j] == 1:
-                    hierachical_loss += tf.reduce_sum(
-                        tf.where(
-                            local_logits[:,i] < local_logits[:,j], 
-                            0, 
-                            log_neg_prob(local_logits[:,j]) - log_neg_prob(local_logits[:,i])
-                        )
-                    )
-                    hierachical_loss += tf.reduce_sum(
-                        tf.where(
-                            global_logits[:,i] < global_logits[:,j], 
-                            0, 
-                            log_neg_prob(global_logits[:,j]) - log_neg_prob(global_logits[:,i])
-                        )
-                    )
-        hierachical_loss /= y_true.shape[0]
+#         hierachical_loss = 0
+#         for i in range(structure.shape[0]):
+#             for j in range(structure.shape[1]):
+#                 if structure[i,j] == 1:
+#                     hierachical_loss += tf.reduce_sum(
+#                         tf.where(
+#                             local_logits[:,i] < local_logits[:,j], 
+#                             0, 
+#                             log_neg_prob(local_logits[:,j]) - log_neg_prob(local_logits[:,i])
+#                         )
+#                     )
+#                     hierachical_loss += tf.reduce_sum(
+#                         tf.where(
+#                             global_logits[:,i] < global_logits[:,j], 
+#                             0, 
+#                             log_neg_prob(global_logits[:,j]) - log_neg_prob(global_logits[:,i])
+#                         )
+#                     )
+#         hierachical_loss /= y_true.shape[0]
         
-        return local_loss + global_loss + alpha * hierachical_loss
+#         return local_loss + global_loss + alpha * hierachical_loss
         
-    return loss_fn_log
+#     return loss_fn_log
 
-def get_loss_fn_log_1(structure, alpha):
+def get_loss_fn_log(structure, alpha):
     def loss_fn_log(y_true, y_pred_logits):
         ''' 
         y_true     [N,K], K = K1 + K2 + ... + KM, where M is the number of layers
@@ -267,28 +308,33 @@ def get_loss_fn_log_1(structure, alpha):
         local_log_neg_prob_2 = local_log_neg_prob[:,tf.newaxis,:]
         
         hierachical_loss += tf.reduce_sum(
-            structure_expand * ((local_logits_1 - local_logits_2) < 0) * (log_neg_prob(local_logits[:,j]) - log_neg_prob(local_logits[:,i]))
+            structure_expand * tf.cast(
+                (-local_logits_1 + local_logits_2) < 0,
+                tf.float32) * (local_log_neg_prob_2 - local_log_neg_prob_1)
+        )
+        global_logits_1 = global_logits[:,:,tf.newaxis]
+        global_logits_2 = global_logits[:,tf.newaxis,:]
+        global_log_neg_prob = log_neg_prob(global_logits)
+        global_log_neg_prob_1 = global_log_neg_prob[:,:,tf.newaxis]
+        global_log_neg_prob_2 = global_log_neg_prob[:,tf.newaxis,:]
+        
+        hierachical_loss += tf.reduce_sum(
+            structure_expand * tf.cast(
+                (-global_logits_1 + global_logits_2) < 0,
+                tf.float32) * (global_log_neg_prob_2 - global_log_neg_prob_1)
         )
         
-        for i in range(structure.shape[0]):
-            for j in range(structure.shape[1]):
-                if structure[i,j] == 1:
-                    hierachical_loss += tf.reduce_sum(
-                        tf.where(
-                            local_logits[:,i] < local_logits[:,j], 
-                            0, 
-                            log_neg_prob(local_logits[:,j]) - log_neg_prob(local_logits[:,i])
-                        )
-                    )
-                    hierachical_loss += tf.reduce_sum(
-                        tf.where(
-                            global_logits[:,i] < global_logits[:,j], 
-                            0, 
-                            log_neg_prob(global_logits[:,j]) - log_neg_prob(global_logits[:,i])
-                        )
-                    )
         hierachical_loss /= y_true.shape[0]
         
         return local_loss + global_loss + alpha * hierachical_loss
         
     return loss_fn_log
+
+def get_structure_from_adajancency(adajancency):
+    structure = np.zeros(adajancency.shape)
+    g = nx.DiGraph(adajancency) # train.A is the matrix where the direct connections are stored 
+    for i in range(len(adajancency)):
+        ancestors = list(nx.descendants(g, i)) #here we need to use the function nx.descendants() because in the directed graph the edges have source from the descendant and point towards the ancestor 
+        if ancestors:
+            structure[i, ancestors] = 1
+    return structure 

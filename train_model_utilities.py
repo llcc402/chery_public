@@ -82,11 +82,11 @@ def train_epoch(model, optimizer, loss_fn, model_name, epochs, train_data, x_tra
                 y_train_batch, 
                 (x_valid, y_valid)
             )
-    if (epoch + 1) % (epochs // 10) == 0:
-        train_loss_list.append(loss)
-        valid_loss_list.append(valid_loss)
-    plt.plot(train_loss_list, 'o', label='train')
-    plt.plot(valid_loss_list, 'o', label='valid')
+        if (epoch + 1) % (epochs // 10) == 0:
+            train_loss_list.append(loss)
+            valid_loss_list.append(valid_loss)
+    plt.plot(train_loss_list, '-o', label='train')
+    plt.plot(valid_loss_list, '-o', label='valid')
     plt.legend()
         
     print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid, x_test, y_test)

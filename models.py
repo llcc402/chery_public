@@ -1,11 +1,11 @@
-from tensorflow.keras.layers import Dense 
+from tensorflow.keras.layers import Dense, Dropout 
 import tensorflow as tf 
 from utilities import * 
 import os 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 class HMCModel(tf.keras.models.Model):
-    def __init__(self, structure, num_classes, hid_dim_list):
+    def __init__(self, structure, num_classes, hid_dim_list, dropout):
         ''' 
         INPUT 
             structure           np.array, [M,M]
@@ -17,14 +17,17 @@ class HMCModel(tf.keras.models.Model):
         self.num_hid_layers = len(hid_dim_list)
         
         self.W1 = list()
+        self.dropout = list()
         for i in range(len(hid_dim_list)):
             self.W1.append(tf.keras.layers.Dense(hid_dim_list[i], activation='relu'))
+            self.dropout.append(Dropout(dropout))
         self.W2 = tf.keras.layers.Dense(num_classes)
         
     def call(self, inputs):
         x = self.W1[0](inputs)
         for i in range(1, self.num_hid_layers):
             x = self.W1[i](x)
+            x = self.dropout[i](x)
         outputs = self.W2(x)
         return outputs
     
