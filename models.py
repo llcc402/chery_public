@@ -38,6 +38,12 @@ class HMCModel(tf.keras.models.Model):
         max_with_structure = get_max_with_structure(self.structure)
         return max_with_structure(inputs)
     
+    def predict(self, inputs):
+        logits = self.call(inputs)
+        logits = self.postprocess(logits)
+        prob = self.get_prob(logits)
+        return prob
+    
 class HMC_LSTM(tf.keras.Model):
     def __init__(self, units, beta, num_classes_list, num_layers):
         '''

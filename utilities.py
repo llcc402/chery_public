@@ -2,6 +2,16 @@ import tensorflow  as tf
 import numpy as np 
 import os 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+from sklearn.metrics import average_precision_score
+
+def custom_score(y_true, y_pred):
+    y_true = y_true.numpy()
+    y_pred = y_pred.numpy()
+    
+    idx = np.sum(y_true, axis=0) != y_true.shape[0] # remove root nodes
+    y_true = y_true[:, idx]
+    y_pred = y_pred[:, idx]
+    return average_precision_score(y_true, y_pred, average='micro')
 
 def get_area(x1, y1, x2, y2):
     return (y1 + y2) * (x2 - x1) / 2
@@ -87,6 +97,19 @@ def get_cross_logits_y(y):
         return outputs, grad
     return cross_logits_y
 
+def remove_root_from_loss(y_true, loss):
+    '''
+    INPUT
+        y_true      [N,M], where M is the number of all classes
+        loss        [N,M], loss for every single element
+    OUTPUT  
+        the "roots" column of loss are assigned 0
+    '''
+    idx = tf.where(tf.reduce_sum(y_true, axis=0) == y_true.shape[0]).numpy()
+    mask = np.ones_like(loss)
+    mask[:, idx] = 0
+    return loss * tf.convert_to_tensor(mask, tf.float32)
+
 def get_loss_fn_coherent(structure):
     def loss_fn_coherent(y_true, y_pred_logits):
         ''' 
@@ -100,8 +123,8 @@ def get_loss_fn_coherent(structure):
         loss1 = y_true * softplus(max_with_structure(cross_logits_y(y_pred_logits)))
         loss2 = (1-y_true) * softplus(max_with_structure(y_pred_logits)) 
         loss3 = (1-y_true) * max_with_structure(y_pred_logits)
-        loss = tf.reduce_mean(loss1 + loss2 + loss3)
-
+        loss = remove_root_from_loss(y_true, loss1+loss2+loss3)
+        loss = tf.reduce_mean(loss)
         return loss 
     return loss_fn_coherent
 

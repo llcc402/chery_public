@@ -3,6 +3,7 @@ import tensorflow as tf
 from utilities import * 
 from models import HMCModel, HMC_LSTM, CoherentLSTM
 import matplotlib.pyplot as plt 
+import datetime 
 import os 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
@@ -71,10 +72,17 @@ def print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid
     test_score = model_score(model, x_test, y_test, model_name)
     print("AU(PRC) \ntrain: {}, validation {}, test {}".format(train_score, valid_score, test_score))
 
+
+
 def train_epoch(model, optimizer, loss_fn, model_name, epochs, train_data, x_train, y_train, x_valid, y_valid, x_test, y_test):
     train_step_fn = get_train_step_fn(model, optimizer, loss_fn, model_name)
     train_loss_list = list()
     valid_loss_list = list()
+    
+    train_score_list = list()
+    valid_score_list = list()
+    test_score_list = list()
+
     for epoch in range(epochs):
         for x_train_batch, y_train_batch in train_data:
             loss, valid_loss = train_step_fn(
@@ -82,11 +90,17 @@ def train_epoch(model, optimizer, loss_fn, model_name, epochs, train_data, x_tra
                 y_train_batch, 
                 (x_valid, y_valid)
             )
-        if (epoch + 1) % (epochs // 10) == 0:
-            train_loss_list.append(loss)
-            valid_loss_list.append(valid_loss)
+        train_loss_list.append(loss.numpy())
+        valid_loss_list.append(valid_loss.numpy())
+        
+        train_score_list.append(custom_score(y_train, model.predict(x_train)))
+        valid_score_list.append(custom_score(y_valid, model.predict(x_valid)))
+        test_score_list.append(custom_score(y_test, model.predict(x_test)))
+
     plt.plot(train_loss_list, '-o', label='train')
     plt.plot(valid_loss_list, '-o', label='valid')
     plt.legend()
         
     print_model_eval_score(model, model_name, x_train, y_train, x_valid, y_valid, x_test, y_test)
+
+    return train_loss_list, valid_loss_list, train_score_list, valid_score_list, test_score_list
