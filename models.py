@@ -45,17 +45,19 @@ class HMCModel(tf.keras.models.Model):
         return prob
     
 class HMC_LSTM(tf.keras.Model):
-    def __init__(self, units, beta, num_classes_list, num_layers):
+    def __init__(self, units, beta, num_classes_list, num_layers, hid_dims, drop_rate):
         '''
         units               number of nurons in LSTM
         beta                integer, balance global and local predictions
         num_classes_list    a list of number of classes in each class layer
         num_layers          integer, len(num_classes_list) == num_layers
+        hid_dims            a list, number of hidden units when extracting features
         '''
         super(HMC_LSTM, self).__init__()
         self.units = units 
         self.beta = beta 
         self.num_layers = num_layers
+        self.hid_dims = hid_dims
         
         self.input_gate = Dense(units,activation='sigmoid')
         self.output_gate = Dense(units, activation='sigmoid')
@@ -67,11 +69,24 @@ class HMC_LSTM(tf.keras.Model):
             self.local_W.append(Dense(num_classes_list[i]))
         
         self.global_W = Dense(tf.reduce_sum(num_classes_list))
+
+        self.fc_layer = list()
+        for i in range(len(hid_dims)):
+            self.fc_layer.append(tf.keras.layers.Dense(hid_dims[i], activation='relu'))
+        
+        self.drop_layer = list()
+        for i in range(len(hid_dims)):
+            self.drop_layer.append(tf.keras.layers.Dropout(drop_rate))
             
     def call(self, inputs):
         ''' 
         inputs     [N,k], where N is the number of examples, k is the number of features
         '''
+        # extracting features
+        for i in range(len(self.hid_dims)):
+            inputs = self.fc_layer[i](inputs)
+            inputs = self.drop_layer[i](inputs)
+
         # init sequence
         x = tf.concat(
             [inputs, tf.zeros([inputs.shape[0],self.units])], 
@@ -108,13 +123,19 @@ class HMC_LSTM(tf.keras.Model):
         )
         local_logits = tf.concat(local_probs, axis=-1)
         
-        return local_logits, global_logits
+        return [local_logits, global_logits]
     
-    def get_prob(self, local_logits, global_logits):
+    def get_prob(self, logits):
+        local_logits, global_logits = logits
         local_prob = tf.nn.sigmoid(local_logits)
         global_prob = tf.nn.sigmoid(global_logits)
         total_prob = self.beta * local_prob + (1-self.beta) * global_prob
         return total_prob, local_prob, global_prob
+    
+    def predict(self, inputs):
+        logits = self.call(inputs)
+        total_prob, _, _ = self.get_prob(logits)
+        return total_prob
     
 class CoherentLSTM(tf.keras.Model):
     def __init__(self, units, beta, num_classes_list, num_layers, structure):
